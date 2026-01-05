@@ -4,13 +4,485 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Guitar Tuner</title>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f1419 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            width: 100%;
+            max-width: 450px;
+        }
+        
+        .tuner-card {
+            background: #1f2937;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            border: 1px solid #374151;
+        }
+        
+        h1 {
+            color: white;
+            text-align: center;
+            font-size: 32px;
+            margin-bottom: 32px;
+            font-weight: 700;
+        }
+        
+        .error {
+            background: rgba(220, 38, 38, 0.2);
+            border: 1px solid #dc2626;
+            color: #fca5a5;
+            padding: 12px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            display: none;
+        }
+        
+        .error.show {
+            display: block;
+        }
+        
+        .gauge-container {
+            background: #111827;
+            border-radius: 16px;
+            border: 2px solid #374151;
+            height: 200px;
+            margin-bottom: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .gauge-marks {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .gauge-mark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            height: 80px;
+        }
+        
+        .gauge-mark-line {
+            width: 2px;
+            height: 12px;
+            margin: 0 auto;
+        }
+        
+        .gauge-mark-center .gauge-mark-line {
+            background: white;
+        }
+        
+        .gauge-mark-line {
+            background: #4b5563;
+        }
+        
+        .needle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: bottom center;
+            width: 4px;
+            height: 80px;
+            transition: transform 0.1s ease;
+        }
+        
+        .needle-line {
+            width: 100%;
+            height: 100%;
+            border-radius: 2px;
+        }
+        
+        .needle-dot {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+        
+        .info-card {
+            background: #111827;
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid #374151;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        
+        .note-display {
+            font-size: 48px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .frequency-display {
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        
+        .string-display {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .target-frequency {
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        
+        .cents-card {
+            background: #111827;
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid #374151;
+            margin-bottom: 32px;
+            text-align: center;
+        }
+        
+        .cents-label {
+            color: #9ca3af;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        
+        .cents-value {
+            font-size: 32px;
+            font-family: monospace;
+            font-weight: 600;
+        }
+        
+        .control-button {
+            width: 100%;
+            padding: 16px;
+            border-radius: 16px;
+            border: none;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .control-button.start {
+            background: #16a34a;
+            color: white;
+        }
+        
+        .control-button.start:hover {
+            background: #15803d;
+        }
+        
+        .control-button.stop {
+            background: #dc2626;
+            color: white;
+        }
+        
+        .control-button.stop:hover {
+            background: #b91c1c;
+        }
+        
+        .tuning-info {
+            text-align: center;
+            color: #6b7280;
+            font-size: 12px;
+            margin-top: 24px;
+        }
+        
+        .color-red {
+            color: #ef4444;
+        }
+        
+        .color-green {
+            color: #22c55e;
+        }
+        
+        .color-gray {
+            color: #6b7280;
+        }
+    </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="text/babel" src="app.js"></script>
+    <div class="container">
+        <div class="tuner-card">
+            <h1>Guitar Tuner</h1>
+            
+            <div class="error" id="error"></div>
+            
+            <div class="gauge-container">
+                <div class="gauge-marks" id="gaugeMarks"></div>
+                <div class="needle" id="needle">
+                    <div class="needle-line" id="needleLine"></div>
+                    <div class="needle-dot" id="needleDot"></div>
+                </div>
+            </div>
+            
+            <div class="info-card">
+                <div class="note-display" id="noteDisplay">--</div>
+                <div class="frequency-display" id="frequencyDisplay">--</div>
+                <div class="string-display" id="stringDisplay"></div>
+                <div class="target-frequency" id="targetFrequency"></div>
+            </div>
+            
+            <div class="cents-card">
+                <div class="cents-label">Cent Deviation</div>
+                <div class="cents-value" id="centsValue">0</div>
+            </div>
+            
+            <button class="control-button start" id="controlButton">Start Tuning</button>
+            
+            <div class="tuning-info">Standard tuning: E2 • A2 • D3 • G3 • B3 • E4</div>
+        </div>
+    </div>
+
+    <script>
+        const stringFrequencies = {
+            'E2': 82.41,
+            'A2': 110.00,
+            'D3': 146.83,
+            'G3': 196.00,
+            'B3': 246.94,
+            'E4': 329.63
+        };
+
+        const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let animationFrame = null;
+        let isListening = false;
+
+        const elements = {
+            error: document.getElementById('error'),
+            needle: document.getElementById('needle'),
+            needleLine: document.getElementById('needleLine'),
+            needleDot: document.getElementById('needleDot'),
+            noteDisplay: document.getElementById('noteDisplay'),
+            frequencyDisplay: document.getElementById('frequencyDisplay'),
+            stringDisplay: document.getElementById('stringDisplay'),
+            targetFrequency: document.getElementById('targetFrequency'),
+            centsValue: document.getElementById('centsValue'),
+            controlButton: document.getElementById('controlButton'),
+            gaugeMarks: document.getElementById('gaugeMarks')
+        };
+
+        // Create gauge marks
+        [-45, -30, -15, 0, 15, 30, 45].forEach(angle => {
+            const mark = document.createElement('div');
+            mark.className = angle === 0 ? 'gauge-mark gauge-mark-center' : 'gauge-mark';
+            mark.style.transform = `translate(-50%, -100%) rotate(${angle}deg)`;
+            
+            const line = document.createElement('div');
+            line.className = 'gauge-mark-line';
+            mark.appendChild(line);
+            
+            elements.gaugeMarks.appendChild(mark);
+        });
+
+        function frequencyToNote(freq) {
+            const noteNum = 12 * (Math.log(freq / 440) / Math.log(2));
+            const roundedNote = Math.round(noteNum) + 69;
+            const noteName = noteStrings[roundedNote % 12];
+            const octave = Math.floor(roundedNote / 12) - 1;
+            const centsOff = Math.floor((noteNum - Math.round(noteNum)) * 100);
+            
+            return { note: noteName + octave, cents: centsOff };
+        }
+
+        function findClosestString(freq) {
+            let closest = '';
+            let minDiff = Infinity;
+            
+            Object.entries(stringFrequencies).forEach(([string, targetFreq]) => {
+                const diff = Math.abs(freq - targetFreq);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = string;
+                }
+            });
+            
+            return closest;
+        }
+
+        function autoCorrelate(buffer, sampleRate) {
+            let SIZE = buffer.length;
+            let rms = 0;
+            
+            for (let i = 0; i < SIZE; i++) {
+                rms += buffer[i] * buffer[i];
+            }
+            rms = Math.sqrt(rms / SIZE);
+            
+            if (rms < 0.01) return -1;
+            
+            let r1 = 0, r2 = SIZE - 1;
+            const threshold = 0.2;
+            
+            for (let i = 0; i < SIZE / 2; i++) {
+                if (Math.abs(buffer[i]) < threshold) {
+                    r1 = i;
+                    break;
+                }
+            }
+            
+            for (let i = 1; i < SIZE / 2; i++) {
+                if (Math.abs(buffer[SIZE - i]) < threshold) {
+                    r2 = SIZE - i;
+                    break;
+                }
+            }
+            
+            buffer = buffer.slice(r1, r2);
+            SIZE = buffer.length;
+            
+            let c = new Array(SIZE).fill(0);
+            for (let i = 0; i < SIZE; i++) {
+                for (let j = 0; j < SIZE - i; j++) {
+                    c[i] = c[i] + buffer[j] * buffer[j + i];
+                }
+            }
+            
+            let d = 0;
+            while (c[d] > c[d + 1]) d++;
+            
+            let maxval = -1, maxpos = -1;
+            for (let i = d; i < SIZE; i++) {
+                if (c[i] > maxval) {
+                    maxval = c[i];
+                    maxpos = i;
+                }
+            }
+            
+            let T0 = maxpos;
+            
+            let x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+            let a = (x1 + x3 - 2 * x2) / 2;
+            let b = (x3 - x1) / 2;
+            if (a) T0 = T0 - b / (2 * a);
+            
+            return sampleRate / T0;
+        }
+
+        function getColor(cents, hasString) {
+            if (!hasString) return '#6b7280';
+            return Math.abs(cents) < 5 ? '#22c55e' : '#ef4444';
+        }
+
+        function updateDisplay(frequency, note, cents, detectedString) {
+            const color = getColor(cents, detectedString !== '');
+            const rotation = Math.max(-45, Math.min(45, cents * 0.9));
+            
+            elements.needle.style.transform = `translate(-50%, -100%) rotate(${rotation}deg)`;
+            elements.needleLine.style.backgroundColor = color;
+            elements.needleDot.style.backgroundColor = color;
+            
+            elements.noteDisplay.textContent = note;
+            elements.noteDisplay.style.color = color;
+            elements.frequencyDisplay.textContent = frequency > 0 ? `${frequency.toFixed(2)} Hz` : '--';
+            
+            if (detectedString) {
+                elements.stringDisplay.textContent = `String: ${detectedString}`;
+                elements.stringDisplay.style.color = color;
+                elements.targetFrequency.textContent = `Target: ${stringFrequencies[detectedString].toFixed(2)} Hz`;
+            } else {
+                elements.stringDisplay.textContent = '';
+                elements.targetFrequency.textContent = '';
+            }
+            
+            elements.centsValue.textContent = cents > 0 ? `+${cents}` : cents;
+            elements.centsValue.style.color = color;
+        }
+
+        function updatePitch() {
+            const buffer = new Float32Array(analyser.fftSize);
+            analyser.getFloatTimeDomainData(buffer);
+            
+            const freq = autoCorrelate(buffer, audioContext.sampleRate);
+            
+            if (freq > 0 && freq < 1000) {
+                const noteData = frequencyToNote(freq);
+                const detectedString = findClosestString(freq);
+                updateDisplay(freq, noteData.note, noteData.cents, detectedString);
+            }
+            
+            animationFrame = requestAnimationFrame(updatePitch);
+        }
+
+        async function startListening() {
+            try {
+                elements.error.classList.remove('show');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 4096;
+                analyser.smoothingTimeConstant = 0.8;
+                
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                
+                isListening = true;
+                elements.controlButton.textContent = 'Stop';
+                elements.controlButton.classList.remove('start');
+                elements.controlButton.classList.add('stop');
+                
+                updatePitch();
+            } catch (err) {
+                elements.error.textContent = 'Microphone access denied. Please allow microphone access to use the tuner.';
+                elements.error.classList.add('show');
+                console.error('Error accessing microphone:', err);
+            }
+        }
+
+        function stopListening() {
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+            }
+            if (microphone && microphone.mediaStream) {
+                microphone.mediaStream.getTracks().forEach(track => track.stop());
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+            
+            isListening = false;
+            elements.controlButton.textContent = 'Start Tuning';
+            elements.controlButton.classList.remove('stop');
+            elements.controlButton.classList.add('start');
+            
+            updateDisplay(0, '--', 0, '');
+        }
+
+        elements.controlButton.addEventListener('click', () => {
+            if (isListening) {
+                stopListening();
+            } else {
+                startListening();
+            }
+        });
+    </script>
 </body>
 </html>
