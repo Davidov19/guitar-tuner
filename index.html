@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Davids Simple Guitar Tuner</title>
+    <title>Guitar Tuner</title>
     <style>
         * {
             margin: 0;
@@ -226,7 +226,7 @@
 <body>
     <div class="container">
         <div class="tuner-card">
-            <h1>David's Simple Guitar Tuner</h1>
+            <h1>Guitar Tuner</h1>
             
             <div class="error" id="error"></div>
             
@@ -268,11 +268,19 @@
 
         const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
+        // Guitar-specific constants
+        const MIN_GUITAR_FREQ = 70;
+        const MAX_GUITAR_FREQ = 350;
+        const MIN_VOLUME_THRESHOLD = 0.02;
+        const FREQ_STABILITY_THRESHOLD = 5;
+        const HISTORY_SIZE = 5;
+
         let audioContext = null;
         let analyser = null;
         let microphone = null;
         let animationFrame = null;
         let isListening = false;
+        let frequencyHistory = [];
 
         const elements = {
             error: document.getElementById('error'),
@@ -326,6 +334,40 @@
             return closest;
         }
 
+        function getStableFrequency(newFreq) {
+            frequencyHistory.push(newFreq);
+            
+            // Keep only recent history
+            if (frequencyHistory.length > HISTORY_SIZE) {
+                frequencyHistory.shift();
+            }
+            
+            // Need enough samples
+            if (frequencyHistory.length < 3) {
+                return -1;
+            }
+            
+            // Calculate average and variance
+            const average = frequencyHistory.reduce((a, b) => a + b) / frequencyHistory.length;
+            const variance = frequencyHistory.reduce((sum, val) => sum + Math.abs(val - average), 0) / frequencyHistory.length;
+            
+            // Only return if stable enough
+            return variance < FREQ_STABILITY_THRESHOLD ? average : -1;
+        }
+
+        function applyHighPassFilter(buffer) {
+            // Simple high-pass filter to remove low-frequency noise
+            const filtered = new Float32Array(buffer.length);
+            const alpha = 0.9;
+            
+            filtered[0] = buffer[0];
+            for (let i = 1; i < buffer.length; i++) {
+                filtered[i] = alpha * (filtered[i - 1] + buffer[i] - buffer[i - 1]);
+            }
+            
+            return filtered;
+        }
+
         function autoCorrelate(buffer, sampleRate) {
             let SIZE = buffer.length;
             let rms = 0;
@@ -335,7 +377,11 @@
             }
             rms = Math.sqrt(rms / SIZE);
             
-            if (rms < 0.01) return -1;
+            // Increased threshold to filter background noise
+            if (rms < MIN_VOLUME_THRESHOLD) return -1;
+            
+            // Apply high-pass filter
+            buffer = applyHighPassFilter(buffer);
             
             let r1 = 0, r2 = SIZE - 1;
             const threshold = 0.2;
@@ -356,6 +402,9 @@
             
             buffer = buffer.slice(r1, r2);
             SIZE = buffer.length;
+            
+            // Reject if buffer too small
+            if (SIZE < 100) return -1;
             
             let c = new Array(SIZE).fill(0);
             for (let i = 0; i < SIZE; i++) {
@@ -382,7 +431,32 @@
             let b = (x3 - x1) / 2;
             if (a) T0 = T0 - b / (2 * a);
             
-            return sampleRate / T0;
+            const freq = sampleRate / T0;
+            
+            // Only accept guitar-range frequencies
+            return (freq >= MIN_GUITAR_FREQ && freq <= MAX_GUITAR_FREQ) ? freq : -1;
+        }
+
+        function updatePitch() {
+            const analyser = analyserRef.current;
+            const buffer = new Float32Array(analyser.fftSize);
+            analyser.getFloatTimeDomainData(buffer);
+            
+            const freq = autoCorrelate(buffer, audioContext.sampleRate);
+            
+            // Only process if in guitar frequency range
+            if (freq >= MIN_GUITAR_FREQ && freq <= MAX_GUITAR_FREQ) {
+                const stableFreq = getStableFrequency(freq);
+                
+                if (stableFreq > 0) {
+                    const noteData = frequencyToNote(stableFreq);
+                    const detectedString = findClosestString(stableFreq);
+                    
+                    updateDisplay(stableFreq, noteData.note, noteData.cents, detectedString);
+                }
+            }
+            
+            animationFrame = requestAnimationFrame(updatePitch);
         }
 
         function getColor(cents, hasString) {
@@ -415,24 +489,10 @@
             elements.centsValue.style.color = color;
         }
 
-        function updatePitch() {
-            const buffer = new Float32Array(analyser.fftSize);
-            analyser.getFloatTimeDomainData(buffer);
-            
-            const freq = autoCorrelate(buffer, audioContext.sampleRate);
-            
-            if (freq > 0 && freq < 1000) {
-                const noteData = frequencyToNote(freq);
-                const detectedString = findClosestString(freq);
-                updateDisplay(freq, noteData.note, noteData.cents, detectedString);
-            }
-            
-            animationFrame = requestAnimationFrame(updatePitch);
-        }
-
         async function startListening() {
             try {
                 elements.error.classList.remove('show');
+                frequencyHistory = [];
                 
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 
@@ -443,6 +503,9 @@
                 
                 microphone = audioContext.createMediaStreamSource(stream);
                 microphone.connect(analyser);
+                
+                // Store analyser in a way updatePitch can access it
+                window.analyserRef = { current: analyser };
                 
                 isListening = true;
                 elements.controlButton.textContent = 'Stop';
@@ -469,6 +532,7 @@
             }
             
             isListening = false;
+            frequencyHistory = [];
             elements.controlButton.textContent = 'Start Tuning';
             elements.controlButton.classList.remove('stop');
             elements.controlButton.classList.add('start');
