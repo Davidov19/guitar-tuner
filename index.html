@@ -203,11 +203,39 @@
             background: #b91c1c;
         }
         
+        .tuning-select {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 2px solid #374151;
+            background: #111827;
+            color: #ffffff;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            outline: none;
+        }
+        
+        .tuning-select:hover {
+            border-color: #4b5563;
+        }
+        
+        .tuning-select:focus {
+            border-color: #16a34a;
+        }
+        
+        .tuning-select option {
+            background: #111827;
+            color: #ffffff;
+            padding: 12px;
+        }
+        
         .tuning-info {
             text-align: center;
             color: #6b7280;
             font-size: 12px;
-            margin-top: 24px;
+            margin-top: 16px;
         }
         
         .color-red {
@@ -252,25 +280,86 @@
             
             <button class="control-button start" id="controlButton">Start Tuning</button>
             
-            <div class="tuning-info">Standard tuning: E2 • A2 • D3 • G3 • B3 • E4</div>
+            <div style="margin-top: 16px;">
+                <select id="tuningSelect" class="tuning-select">
+                    <option value="standard">Guitar - Standard Tuning</option>
+                    <option value="dropd">Guitar - Drop D</option>
+                    <option value="halfstep">Guitar - Half Step Down</option>
+                    <option value="ukulele">Ukulele</option>
+                </select>
+            </div>
+            
+            <div class="tuning-info" id="tuningInfo">Standard tuning: E2 • A2 • D3 • G3 • B3 • E4</div>
         </div>
     </div>
 
     <script>
-        const stringFrequencies = {
-            'E2': 82.41,
-            'A2': 110.00,
-            'D3': 146.83,
-            'G3': 196.00,
-            'B3': 246.94,
-            'E4': 329.63
+        // Tuning profiles
+        const tuningProfiles = {
+            standard: {
+                name: 'Standard Tuning',
+                strings: {
+                    'E2': 82.41,
+                    'A2': 110.00,
+                    'D3': 146.83,
+                    'G3': 196.00,
+                    'B3': 246.94,
+                    'E4': 329.63
+                },
+                display: 'E2 • A2 • D3 • G3 • B3 • E4',
+                minFreq: 70,
+                maxFreq: 350
+            },
+            dropd: {
+                name: 'Drop D Tuning',
+                strings: {
+                    'D2': 73.42,
+                    'A2': 110.00,
+                    'D3': 146.83,
+                    'G3': 196.00,
+                    'B3': 246.94,
+                    'E4': 329.63
+                },
+                display: 'D2 • A2 • D3 • G3 • B3 • E4',
+                minFreq: 70,
+                maxFreq: 350
+            },
+            halfstep: {
+                name: 'Half Step Down',
+                strings: {
+                    'D#2': 77.78,
+                    'G#2': 103.83,
+                    'C#3': 138.59,
+                    'F#3': 185.00,
+                    'A#3': 233.08,
+                    'D#4': 311.13
+                },
+                display: 'D#2 • G#2 • C#3 • F#3 • A#3 • D#4',
+                minFreq: 70,
+                maxFreq: 330
+            },
+            ukulele: {
+                name: 'Ukulele (Soprano)',
+                strings: {
+                    'G4': 392.00,
+                    'C4': 261.63,
+                    'E4': 329.63,
+                    'A4': 440.00
+                },
+                display: 'G4 • C4 • E4 • A4',
+                minFreq: 250,
+                maxFreq: 450
+            }
         };
+
+        let currentTuning = 'standard';
+        let stringFrequencies = tuningProfiles[currentTuning].strings;
+        let MIN_GUITAR_FREQ = tuningProfiles[currentTuning].minFreq;
+        let MAX_GUITAR_FREQ = tuningProfiles[currentTuning].maxFreq;
 
         const noteStrings = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
-        // Guitar-specific constants
-        const MIN_GUITAR_FREQ = 70;
-        const MAX_GUITAR_FREQ = 350;
+        // Constants
         const MIN_VOLUME_THRESHOLD = 0.02;
         const FREQ_STABILITY_THRESHOLD = 5;
         const HISTORY_SIZE = 5;
@@ -293,7 +382,9 @@
             targetFrequency: document.getElementById('targetFrequency'),
             centsValue: document.getElementById('centsValue'),
             controlButton: document.getElementById('controlButton'),
-            gaugeMarks: document.getElementById('gaugeMarks')
+            gaugeMarks: document.getElementById('gaugeMarks'),
+            tuningSelect: document.getElementById('tuningSelect'),
+            tuningInfo: document.getElementById('tuningInfo')
         };
 
         // Create gauge marks
@@ -547,6 +638,27 @@
                 startListening();
             }
         });
+
+        // Handle tuning profile changes
+        elements.tuningSelect.addEventListener('change', (e) => {
+            currentTuning = e.target.value;
+            const profile = tuningProfiles[currentTuning];
+            
+            stringFrequencies = profile.strings;
+            MIN_GUITAR_FREQ = profile.minFreq;
+            MAX_GUITAR_FREQ = profile.maxFreq;
+            
+            elements.tuningInfo.textContent = `${profile.name}: ${profile.display}`;
+            
+            // Reset display when changing tuning
+            if (!isListening) {
+                updateDisplay(0, '--', 0, '');
+            }
+            frequencyHistory = [];
+        });
+
+        // Initialize tuning info
+        elements.tuningInfo.textContent = `${tuningProfiles[currentTuning].name}: ${tuningProfiles[currentTuning].display}`;
     </script>
 </body>
 </html>
